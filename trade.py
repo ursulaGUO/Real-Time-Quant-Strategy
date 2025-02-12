@@ -93,19 +93,19 @@ def predict_next_price(ticker, current_data):
     predicted_price = model.predict(df)[0]
     return predicted_price
 
-def execute_trade(ticker, current_price, predicted_price):
+def execute_trade(ticker, current_price, predicted_price, trade_date):
     """Decide to buy, sell, or hold based on predictions."""
     global cash, portfolio
 
     if predicted_price > current_price:
         # Buy Signal (if cash is available)
-        shares_to_buy = int(min(cash * 0.1,1000) / current_price)
+        shares_to_buy = int(min(cash * 0.1, 500) / current_price)  # Spend as much as $500
         if shares_to_buy > 0:
             cost = shares_to_buy * current_price
             cash -= cost
             portfolio[ticker] = portfolio.get(ticker, 0) + shares_to_buy
-            trade_history.append(f"BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}")
-            print(f"BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
+            trade_history.append(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}")
+            print(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
 
     elif predicted_price < current_price and ticker in portfolio:
         # Sell Signal if stock is held
@@ -114,8 +114,8 @@ def execute_trade(ticker, current_price, predicted_price):
             revenue = shares_to_sell * current_price
             cash += revenue
             del portfolio[ticker]
-            trade_history.append(f"SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f}")
-            print(f"SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
+            trade_history.append(f"{trade_date} - SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f}")
+            print(f"{trade_date} - SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
 
     # Print summary after each trade
     print_portfolio_summary()
@@ -153,14 +153,15 @@ def connect_to_server():
                 stock_data = json.loads(data)
                 ticker = stock_data.get("Ticker")
                 current_price = float(stock_data.get("Close", 0))
+                trade_date = stock_data.get("Date", "Unknown Date")  # Extract date from data
                 latest_prices[ticker] = current_price
 
                 # Predict next day's price
                 predicted_price = predict_next_price(ticker, stock_data)
-                print(f"{ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
+                print(f"{trade_date} - {ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
 
-                # Execute trade decision
-                execute_trade(ticker, current_price, predicted_price)
+                # Execute trade decision with date
+                execute_trade(ticker, current_price, predicted_price, trade_date)
 
             except json.JSONDecodeError:
                 print("Received unexpected data format:", data)
@@ -178,6 +179,7 @@ def connect_to_server():
         print("Trade History:")
         for trade in trade_history:
             print(" -", trade)
+
 
 
 if __name__ == "__main__":
