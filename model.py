@@ -111,7 +111,7 @@ print("project1/Predictions saved to xgboost_predictions.csv")
 
 
 # Save model to a file
-model_filename = "project1/xgboost_stock_model.pkl"
+model_filename = "xgboost_stock_model.pkl"
 with open(model_filename, "wb") as file:
     pickle.dump(model, file)
 
