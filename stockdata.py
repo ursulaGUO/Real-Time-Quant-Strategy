@@ -65,7 +65,7 @@ for file in all_files:
 
 # Combine all stock data into one DataFrame
 
-data_folder = "project1/US_Stock_Data"
+data_folder = "US_Stock_Data"
 all_files = [os.path.join(data_folder, f) for f in os.listdir(data_folder) if f.endswith('.csv')]
 df_list = []
 
@@ -93,4 +93,4 @@ df = pd.concat(df_list, ignore_index=True)
 df = df.sort_values(by=["Date", "Ticker"]).reset_index(drop=True)
 df.columns.name = None
 df = df.reset_index(drop=True)
-df.to_csv("project1/finance/finance.csv")
+df.to_csv("finance/finance.csv")
