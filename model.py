@@ -8,7 +8,7 @@ import pickle
 
 
 # Path to folder containing stock data
-data_folder = "project1/US_Stock_Data"
+data_folder = "US_Stock_Data"
 
 # Read and merge all CSV files
 all_files = [os.path.join(data_folder, f) for f in os.listdir(data_folder) if f.endswith('.csv')]
