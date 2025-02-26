@@ -3,13 +3,19 @@ import json
 import pickle
 import pandas as pd
 import numpy as np
+import argparse
 
 # Server details
 HOST = "127.0.0.1"
 PORT = 8080
 
-# Load trained XGBoost model
-model_filename = "var_stock1_model.pkl"
+# Load model based on argument
+parser = argparse.ArgumentParser()
+parser.add_argument('-model', type=str, required=True, help="Input model name e.g. 'xgboost' or 'Gradient_Boosting' or 'Random_Forest' or 'var'")
+args = parser.parse_args()
+model_name = args.model
+model_filename = f"{model_name}_stock_model.pkl"
+print(f"You've opted to use {model_name} model, which uses {model_filename}.")
 with open(model_filename, "rb") as file:
     model = pickle.load(file)
 
@@ -211,7 +217,7 @@ def print_portfolio_summary():
     """Prints the current cash balance, open positions, and total earnings."""
     total_stock_value = sum(portfolio[ticker] * latest_prices.get(ticker, 0) for ticker in portfolio)
     total_value = cash + total_stock_value
-    total_earnings = total_value - 20000  # Assuming $20,000 as the starting capital
+    total_earnings = total_value - 20000 
 
     print("\nCurrent Portfolio Summary:")
     print(f" - Cash: ${cash:.2f}")
@@ -279,9 +285,9 @@ def connect_to_server():
         # Convert trade records to a DataFrame and display/save
         trade_df = pd.DataFrame(trade_records)
         print("\nTrade Records DataFrame:")
-        print(trade_df)
         # Save trade records
         trade_df.to_csv(f"portfolios/{model_filename[:-16]}_trade_records.csv", index=False)
 
 if __name__ == "__main__":
+
     connect_to_server()
