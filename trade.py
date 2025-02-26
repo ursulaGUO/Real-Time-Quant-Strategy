@@ -8,7 +8,7 @@ HOST = "127.0.0.1"
 PORT = 8080
 
 # Load trained XGBoost model
-model_filename = "xgboost_stock_model.pkl"
+model_filename = "Gradient_Boosting_stock_model.pkl"
 with open(model_filename, "rb") as file:
     model = pickle.load(file)
 
@@ -17,9 +17,10 @@ print("XGBoost model loaded successfully.")
 # Initialize trading variables
 cash = 20000  # Starting capital
 portfolio = {}  # Dictionary to track holdings (ticker -> number of shares)
-trade_history = []  # Store trade records
-price_history = {}  # Store historical price data for feature computation
-latest_prices = {}  # Dictionary to store the latest market prices of stocks
+trade_history = [] 
+trade_records = [] 
+price_history = {} 
+latest_prices = {} 
 
 def compute_features(ticker, current_data):
     """Compute necessary features for XGBoost model using historical data."""
@@ -72,8 +73,6 @@ def compute_features(ticker, current_data):
         "Volume": latest_features["Volume"]
     }
 
-
-
 def predict_next_price(ticker, current_data):
     """Compute features and predict next day's closing price using XGBoost."""
     feature_data = compute_features(ticker, current_data)
@@ -94,8 +93,13 @@ def predict_next_price(ticker, current_data):
     return predicted_price
 
 def execute_trade(ticker, current_price, predicted_price, trade_date):
-    """Decide to buy, sell, or hold based on predictions."""
+    """Decide to buy, sell, or hold based on predictions and update portfolio records."""
     global cash, portfolio
+
+    # Calculate total portfolio value for record keeping
+    def get_portfolio_value():
+        total_stock_value = sum(portfolio[t] * latest_prices.get(t, 0) for t in portfolio)
+        return cash + total_stock_value
 
     if predicted_price > current_price:
         # Buy Signal (if cash is available)
@@ -107,8 +111,20 @@ def execute_trade(ticker, current_price, predicted_price, trade_date):
                 cost = shares_to_buy * current_price
                 cash -= cost
                 portfolio[ticker] = portfolio.get(ticker, 0) + shares_to_buy
-                trade_history.append(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}")
-                print(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
+                message = f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}"
+                trade_history.append(message)
+                # Save trade details as a record (dictionary)
+                trade_records.append({
+                    "Date": trade_date,
+                    "Ticker": ticker,
+                    "Action": "BUY",
+                    "Shares": shares_to_buy,
+                    "Trade Price": current_price,
+                    "Cash Balance": cash,
+                    "Portfolio Snapshot": str(portfolio),
+                    "Total Portfolio Value": get_portfolio_value()
+                })
+                print(f"{message} | Cash: ${cash:.2f}")
 
     elif predicted_price < current_price and ticker in portfolio:
         # Sell Signal if stock is held
@@ -117,8 +133,19 @@ def execute_trade(ticker, current_price, predicted_price, trade_date):
             revenue = shares_to_sell * current_price
             cash += revenue
             del portfolio[ticker]
-            trade_history.append(f"{trade_date} - SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f}")
-            print(f"{trade_date} - SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
+            message = f"{trade_date} - SELL {shares_to_sell} shares of {ticker} at ${current_price:.2f}"
+            trade_history.append(message)
+            trade_records.append({
+                "Date": trade_date,
+                "Ticker": ticker,
+                "Action": "SELL",
+                "Shares": shares_to_sell,
+                "Trade Price": current_price,
+                "Cash Balance": cash,
+                "Portfolio Snapshot": str(portfolio),
+                "Total Portfolio Value": get_portfolio_value()
+            })
+            print(f"{message} | Cash: ${cash:.2f}")
 
     # Print summary after each trade
     print_portfolio_summary()
@@ -137,7 +164,6 @@ def print_portfolio_summary():
         print(f"   {ticker}: {shares} shares, Market Value: ${stock_value:.2f}")
     print(f" - Total Portfolio Value: ${total_value:.2f}")
     print(f" - Total Earnings: ${total_earnings:.2f}\n")
-    #print(f" - Trading period starts on ${start_date} and ends on ${end_date}.")
 
 def connect_to_server():
     """Connect to real-time stock data server and trade based on predictions."""
@@ -156,17 +182,20 @@ def connect_to_server():
                 # Parse incoming JSON stock data
                 stock_data = json.loads(data)
                 ticker = stock_data.get("Ticker")
-                current_price = float(stock_data.get("Close", 0)) # Taken care of 
+                current_price = float(stock_data.get("Close", 0))
                 trade_date = stock_data.get("Date", "Unknown Date")  # Extract date from data
                 latest_prices[ticker] = current_price
 
+                # Exit condition: if current_price == 0, exit the loop.
+                if current_price == 0:
+                    print("Trading concluded.")
+                    break
+
                 # Predict next day's price
-                # TODO: Threading here to process while reading in server data
                 predicted_price = predict_next_price(ticker, stock_data)
                 print(f"{trade_date} - {ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
 
                 # Execute trade decision with date
-                # TODO: Threading here to process while reading in server data
                 execute_trade(ticker, current_price, predicted_price, trade_date)
 
             except json.JSONDecodeError:
@@ -178,15 +207,19 @@ def connect_to_server():
         print("\nClient closed manually.")
     finally:
         client.close()
-
-        # Print final summary
+        # Print final summary and trade records
         print("Trade History:")
         for trade in trade_history:
             print(" -", trade)
         print("\nFinal Trading Summary:")
         print_portfolio_summary()
 
-
+        # Convert trade records to a DataFrame and display/save
+        trade_df = pd.DataFrame(trade_records)
+        print("\nTrade Records DataFrame:")
+        print(trade_df)
+        # Save trade records
+        trade_df.to_csv(f"portfolios/{model_filename[:-16]}_trade_records.csv", index=False)
 
 if __name__ == "__main__":
     connect_to_server()
