@@ -134,6 +134,7 @@ def print_portfolio_summary():
         print(f"   {ticker}: {shares} shares, Market Value: ${stock_value:.2f}")
     print(f" - Total Portfolio Value: ${total_value:.2f}")
     print(f" - Total Earnings: ${total_earnings:.2f}\n")
+    #print(f" - Trading period starts on ${start_date} and ends on ${end_date}.")
 
 def connect_to_server():
     """Connect to real-time stock data server and trade based on predictions."""
@@ -152,15 +153,18 @@ def connect_to_server():
                 # Parse incoming JSON stock data
                 stock_data = json.loads(data)
                 ticker = stock_data.get("Ticker")
+                # TODO: figure out a way to stop trading at the end without 0
                 current_price = float(stock_data.get("Close", 0))
                 trade_date = stock_data.get("Date", "Unknown Date")  # Extract date from data
                 latest_prices[ticker] = current_price
 
                 # Predict next day's price
+                # TODO: Threading here to process while reading in server data
                 predicted_price = predict_next_price(ticker, stock_data)
                 print(f"{trade_date} - {ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
 
                 # Execute trade decision with date
+                # TODO: Threading here to process while reading in server data
                 execute_trade(ticker, current_price, predicted_price, trade_date)
 
             except json.JSONDecodeError:
@@ -174,11 +178,11 @@ def connect_to_server():
         client.close()
 
         # Print final summary
-        print("\nFinal Trading Summary:")
-        print_portfolio_summary()
         print("Trade History:")
         for trade in trade_history:
             print(" -", trade)
+        print("\nFinal Trading Summary:")
+        print_portfolio_summary()
 
 
 
