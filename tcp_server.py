@@ -51,7 +51,7 @@ class ThreadedServer(object):
             try:
                 data = client.recv(size).decode()
                 if data:
-                    # Set the response to echo back the recieved data
+                    # Set the response to echo back the received data
                     a=json.loads(data.rstrip('\n\r '))
                     self.handle_client_answer(a)
     
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode",action="store", dest="mode")
     parser.add_argument("-p", "--port",action="store", dest="port",type=int)
     parser.add_argument("-t", "--time-interval",action="store",
-                        dest="interval",type=int,default=1)
+                        dest="interval",type=float,default=1)
     
     opt=parser.parse_args()
     if not opt.port:
