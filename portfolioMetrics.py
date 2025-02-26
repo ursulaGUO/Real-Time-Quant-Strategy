@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 models = {
     "xgboost": "portfolios/xgboost_trade_records.csv",
     "random_forest": "portfolios/random_forest_trade_records.csv",
-    "gradient_boosting": "portfolios/gradient_boosting_trade_records.csv"
+    "gradient_boosting": "portfolios/gradient_boosting_trade_records.csv",
+    "var": "portfolios/var_trade_records.csv"
 }
 
 # Load benchmark data from finance/marketIndex.csv

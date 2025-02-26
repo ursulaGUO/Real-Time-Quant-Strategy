@@ -5,6 +5,7 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import root_mean_squared_error
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from statsmodels.tsa.api import VAR
 import pickle
 import random
 import matplotlib.pyplot as plt
@@ -129,6 +130,83 @@ model3 = GradientBoostingRegressor(
 model3.fit(X_train, y_train)
 
 
+# VAR model
+df_list = []
+
+for file in all_files:
+    try:
+        # Example: CSV has multi-row header with date as index
+        data = pd.read_csv(file, header=[0, 1], index_col=0, parse_dates=True)
+        
+        # Extract the ticker symbol from the second row of the header
+        ticker = data.columns[0][1] 
+        
+        # Flatten columns
+        data.columns = data.columns.droplevel(1)
+        data = data[["Close"]]  # keep only 'Close' for demonstration
+        data["Ticker"] = ticker
+        
+        # Move date index to a column for easier merging/pivot
+        data.reset_index(inplace=True)
+        data.rename(columns={"index": "Date"}, inplace=True)
+        
+        df_list.append(data)
+    except Exception as e:
+        print(f"Error reading {file}: {e}")
+
+# Combine all CSV files into a single DataFrame
+df = pd.concat(df_list, ignore_index=True)
+df.columns.name = None
+
+df.sort_values(by=["Date", "Ticker"], inplace=True)
+wide_df = df.pivot(index="Date", columns="Ticker", values="Close")
+
+returns_df = wide_df.pct_change().dropna()
+
+# Let's do an 80/20 time-based split
+split_idx = int(len(returns_df) * 0.8)
+train_data = returns_df.iloc[:split_idx]
+test_data  = returns_df.iloc[split_idx:]
+
+# Elbow chart
+var_model = VAR(train_data)
+results_aic =[]
+for p in range(1,30):
+    results = var_model.fit(p)
+    results_aic.append(results.aic)
+
+
+results_bic =[]
+for p in range(1,30):
+    results = var_model.fit(p)
+    results_bic.append(results.bic)
+    
+
+
+var_model = VAR(endog=train_data)
+
+results = var_model.fit(8)  
+
+print("Selected Order (lag) via AIC:", results.k_ar)
+
+
+lag_order = results.k_ar  
+
+initial_state = train_data.values[-lag_order:]
+
+num_steps = len(test_data)
+
+# Forecast returns
+forecasted = results.forecast(y=initial_state, steps=num_steps)
+
+forecast_index = test_data.index  # same dates as test_data
+forecast_cols = test_data.columns  # same tickers
+forecast_df = pd.DataFrame(forecasted, index=forecast_index, columns=forecast_cols)
+
+
+model4 = results
+
+
 # Compute Actual and Predicted Movement Direction
 def direction(X_test, y_test, y_pred, pred_df):
     pred_df["Actual_Direction"] = (y_test.values > X_test["Prev_Close"].values).astype(int)
@@ -141,17 +219,38 @@ def direction(X_test, y_test, y_pred, pred_df):
 # Check performance metrics
 models_dict = {"Random_Forest": model1,
                "XGBoost": model2,
-               "Gradient_Boosting": model3}
+               "Gradient_Boosting": model3,
+               "var": model4}
 rmse_scores = {}
 direction_accuracy_scores = {}
 for key, model in models_dict.items():
-    y_pred = model.predict(X_test)
-    pred_df = pd.DataFrame({"Actual": y_test, "Predicted": y_pred}, index=y_test.index)
-    rmse = root_mean_squared_error(y_test, y_pred)
-    direction_accuracy = direction(X_test, y_test, y_pred, pred_df)
-    print(f"Model {key} \n RMSE: {rmse}; Direction Accuracy: {direction_accuracy}")
-    rmse_scores[key] = rmse
-    direction_accuracy_scores[key] = direction_accuracy
+    if key != "var":
+        y_pred = model.predict(X_test)
+        pred_df = pd.DataFrame({"Actual": y_test, "Predicted": y_pred}, index=y_test.index)
+        rmse = root_mean_squared_error(y_test, y_pred)
+        direction_accuracy = direction(X_test, y_test, y_pred, pred_df)
+        print(f"Model {key} \n RMSE: {rmse}; Direction Accuracy: {direction_accuracy}")
+        rmse_scores[key] = rmse
+        direction_accuracy_scores[key] = direction_accuracy
+    else:
+        rmse_vals = []
+        direction_accuracies = []
+        for col in forecast_cols:
+            # RMSE
+            actual = test_data[col].values
+            pred   = forecast_df[col].values
+            rmse    = root_mean_squared_error(actual, pred)
+            rmse_vals.append(rmse)
+        
+            # Direction accuracy
+            actual_dir = (test_data[col] > 0).astype(int)
+            pred_dir   = (forecast_df[col] > 0).astype(int)
+            match      = (actual_dir == pred_dir)
+            accuracy   = match.mean()
+            direction_accuracies.append(accuracy)
+        rmse_scores[key] = np.mean(rmse_vals)
+        direction_accuracy_scores[key] = np.mean(direction_accuracies)
+
 
     # Save models
     model_filename = f"{key}_stock_model.pkl"
