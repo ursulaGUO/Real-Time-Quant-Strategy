@@ -2,13 +2,14 @@ import socket
 import json
 import pickle
 import pandas as pd
+import numpy as np
 
 # Server details
 HOST = "127.0.0.1"
 PORT = 8080
 
 # Load trained XGBoost model
-model_filename = "Gradient_Boosting_stock_model.pkl"
+model_filename = "var_stock1_model.pkl"
 with open(model_filename, "rb") as file:
     model = pickle.load(file)
 
@@ -21,6 +22,60 @@ trade_history = []
 trade_records = [] 
 price_history = {} 
 latest_prices = {} 
+
+############ VAR changes ################################
+if model_filename[0:3] == "var":
+    var_results = model
+
+    k_ar = var_results.k_ar  # how many lags the model uses
+    print(f"Loaded VAR model with k_ar={k_ar}")
+    var_columns = ["AAPL", "AMZN", "BRK-B", "GOOGL", "JNJ", "META", "MSFT", "NVDA", "TSLA", "V"]  # example for multi-ticker
+    hist_df = pd.DataFrame(columns=var_columns)
+
+    def update_var_data(ticker, close_price):
+        global hist_df
+        
+        new_row = pd.DataFrame({ticker: [close_price]})
+        
+        for col in var_columns:
+            if col not in new_row.columns:
+                new_row[col] = np.nan
+        
+        # Reorder columns
+        new_row = new_row[var_columns]
+        
+        # Append to hist_df
+        hist_df = pd.concat([hist_df, new_row], ignore_index=True)
+        # Forward fill or something to fill missing columns for other tickers
+        hist_df.fillna(method="ffill", inplace=True)
+        
+        # Keep only the last k_ar rows + 1 or 2 buffer
+        hist_df = hist_df.tail(k_ar+2)
+
+
+    def predict_next_price_var(ticker):
+
+        global hist_df
+        
+        # We need at least k_ar rows to forecast
+        if len(hist_df) < k_ar:
+            print("Not enough history to forecast yet.")
+            return None
+        
+        # The 'last_obs' are the final k_ar rows
+        last_obs = hist_df.values[-k_ar:] 
+        
+        # Forecast 1 step
+        forecast_array = var_results.forecast(last_obs, steps=1) 
+        
+        # Identify the column index for this ticker
+        if ticker not in var_columns:
+            print(f"Ticker {ticker} not in VAR columns. Cannot forecast.")
+            return None
+        
+        col_idx = var_columns.index(ticker)
+        predicted_value = forecast_array[0, col_idx]
+        return predicted_value
 
 def compute_features(ticker, current_data):
     """Compute necessary features for XGBoost model using historical data."""
@@ -95,6 +150,8 @@ def predict_next_price(ticker, current_data):
 def execute_trade(ticker, current_price, predicted_price, trade_date):
     """Decide to buy, sell, or hold based on predictions and update portfolio records."""
     global cash, portfolio
+    if predicted_price is None:
+        return
 
     # Calculate total portfolio value for record keeping
     def get_portfolio_value():
@@ -192,8 +249,13 @@ def connect_to_server():
                     break
 
                 # Predict next day's price
-                predicted_price = predict_next_price(ticker, stock_data)
-                print(f"{trade_date} - {ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
+                if model_filename[0:3] != "var":
+                    predicted_price = predict_next_price(ticker, stock_data)
+                else:
+                    update_var_data(ticker, current_price)
+                    predicted_price = predict_next_price_var(ticker)
+                if predicted_price is not None:
+                    print(f"{trade_date} - {ticker}: Current Price = ${current_price:.2f}, Predicted = ${predicted_price:.2f}")
 
                 # Execute trade decision with date
                 execute_trade(ticker, current_price, predicted_price, trade_date)
