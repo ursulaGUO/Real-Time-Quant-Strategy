@@ -99,13 +99,16 @@ def execute_trade(ticker, current_price, predicted_price, trade_date):
 
     if predicted_price > current_price:
         # Buy Signal (if cash is available)
-        shares_to_buy = int(min(cash * 0.1, 500) / current_price)  # Spend as much as $500
-        if shares_to_buy > 0:
-            cost = shares_to_buy * current_price
-            cash -= cost
-            portfolio[ticker] = portfolio.get(ticker, 0) + shares_to_buy
-            trade_history.append(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}")
-            print(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
+        if current_price == 0:
+            shares_to_buy = 0
+        else:
+            shares_to_buy = int(min(cash * 0.1, 500) / current_price)  # Spend as much as $500
+            if shares_to_buy > 0:
+                cost = shares_to_buy * current_price
+                cash -= cost
+                portfolio[ticker] = portfolio.get(ticker, 0) + shares_to_buy
+                trade_history.append(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f}")
+                print(f"{trade_date} - BUY {shares_to_buy} shares of {ticker} at ${current_price:.2f} | Cash: ${cash:.2f}")
 
     elif predicted_price < current_price and ticker in portfolio:
         # Sell Signal if stock is held
