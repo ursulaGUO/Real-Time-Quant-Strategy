@@ -156,8 +156,7 @@ def connect_to_server():
                 # Parse incoming JSON stock data
                 stock_data = json.loads(data)
                 ticker = stock_data.get("Ticker")
-                # TODO: figure out a way to stop trading at the end without 0
-                current_price = float(stock_data.get("Close", 0))
+                current_price = float(stock_data.get("Close", 0)) # Taken care of 
                 trade_date = stock_data.get("Date", "Unknown Date")  # Extract date from data
                 latest_prices[ticker] = current_price
 
